@@ -411,7 +411,7 @@ export async function run () {
     const excludeTables = configData.parameters.excludeTables || [];
     const useDataPreviews = configData.parameters.useDataPreviews || false;
     const writeData = configData.parameters.writeData || false;
-    const openApiToken = configData.parameters.#openApiKey || null;
+    const openApiToken = configData.parameters['#openApiKey'] || null;
     // todo
     process.env.OPENAI_API_KEY = openApiToken;
     if (!openApiToken) {
@@ -422,8 +422,6 @@ export async function run () {
     let tables = await getTables(storage, useDataPreviews);
     tables = await filterTables(tables, configurations, includeFlows, excludeTables);
 
-    tables = [tables[0]];
-
     // generate completion for all tables
     let {tableMetadata, columnsMetadata, tags} = await generateTablesMetadata(tables, configurations, explanations);
     let newTags = await generateCategories(tags);
@@ -431,5 +429,4 @@ export async function run () {
     tableMetadata = await assignCategories(newTags, tableMetadata);
     await writeMetadata(tableMetadata, columnsMetadata, writeData, storage);
     process.exit(1);
-
 }
