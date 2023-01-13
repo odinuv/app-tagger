@@ -397,8 +397,14 @@ async function writeMetadata(tableMetadata, columnsMetadata, writeData, storage)
         if (writeData) {
             console.log(`Writing table ${tableId} metadata.`);
             let ret = await storage.setTableMetadata(tableId, tableMetadataProcessed, columnsMetadataProcessed);
+            freeze(1000);
         }
     }));
+}
+
+function freeze(time) {
+    const stop = new Date().getTime() + time;
+    while(new Date().getTime() < stop);
 }
 
 export async function run () {
