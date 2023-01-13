@@ -164,7 +164,7 @@ ${tablePrompt}
 
 async function createCompletion(prompt, size, maxTokens = 50)
 {
-    console.log(prompt);
+    //console.log(prompt);
     const openApiConfiguration = new Configuration({
         apiKey: process.env.OPENAI_API_KEY,
     });
@@ -178,7 +178,7 @@ async function createCompletion(prompt, size, maxTokens = 50)
         presence_penalty: 1.5,
     });
 
-    console.log(response.data.choices);
+    //console.log(response.data.choices);
     let text = response.data.choices[0].text ?? '';
     let matches = text.matchAll(/\{(.*?)}/g);
     let words = [];
@@ -397,7 +397,6 @@ async function writeMetadata(tableMetadata, columnsMetadata, writeData, storage)
         if (writeData) {
             console.log(`Writing table ${tableId} metadata.`);
             let ret = await storage.setTableMetadata(tableId, tableMetadataProcessed, columnsMetadataProcessed);
-            console.log(ret);
         }
     }));
 }
