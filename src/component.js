@@ -397,7 +397,7 @@ async function writeMetadata(tableMetadata, columnsMetadata, writeData, storage)
         if (writeData) {
             console.log(`Writing table ${tableId} metadata.`);
             let ret = await storage.setTableMetadata(tableId, tableMetadataProcessed, columnsMetadataProcessed);
-            freeze(1000);
+            //freeze(1000);
         }
     }));
 }
@@ -433,5 +433,5 @@ export async function run () {
 
     tableMetadata = await assignCategories(newTags, tableMetadata);
     await writeMetadata(tableMetadata, columnsMetadata, writeData, storage);
-    process.exit(1);
+    process.exit(0);
 }
