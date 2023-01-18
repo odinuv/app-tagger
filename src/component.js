@@ -8,6 +8,8 @@ import {COLUMN_METADATA, Metadatum, TABLE_METADATA} from "./metadatum.js";
 import {COLUMN_TAG, TABLE_TAG, Tag} from "./tag.js";
 import {Table} from "./table.js";
 
+let completionTokens = 0;
+
 function processConfigurations(componentConfigurations)
 {
     const excludedComponents = ['orchestrator', 'keboola.scheduler', 'keboola.sandboxes'];
@@ -162,9 +164,29 @@ ${tablePrompt}
 """`
 }
 
+async function createCompletionRaw(prompt, maxTokens = 50)
+{
+    const openApiConfiguration = new Configuration({
+        apiKey: process.env.OPENAI_API_KEY,
+    });
+    const openai = new OpenAIApi(openApiConfiguration);
+    const response = await openai.createCompletion({
+        model: "text-davinci-003",
+        prompt: prompt,
+        temperature: 0,
+        max_tokens: maxTokens,
+        frequency_penalty: 1,
+        presence_penalty: 1.5,
+    });
+
+    //console.log(response.data);
+    completionTokens += response.data.usage.completion_tokens
+    return response.data.choices[0].text ?? '';
+}
+
 async function createCompletion(prompt, size, maxTokens = 50)
 {
-    //console.log(prompt);
+    console.log(prompt);
     const openApiConfiguration = new Configuration({
         apiKey: process.env.OPENAI_API_KEY,
     });
@@ -178,7 +200,9 @@ async function createCompletion(prompt, size, maxTokens = 50)
         presence_penalty: 1.5,
     });
 
-    //console.log(response.data.choices);
+    console.log(response.data);
+    completionTokens += response.data.usage.completion_tokens
+
     let text = response.data.choices[0].text ?? '';
     let matches = text.matchAll(/\{(.*?)}/g);
     let words = [];
@@ -377,6 +401,18 @@ async function assignCategories(newTags, tableMetadata)
     return tableMetadata;
 }
 
+async function generateDescriptions(tables, explanations, configurations, tableMetadata)
+{
+    await Promise.all(tables.map(async (table) => {
+        let promptBase = await prepareTablePrompt(explanations, configurations, table);
+        let tablePrompt = promptBase + '\nDescribe how the table can be used. Describe what can be found in the table.';
+        let description = await createCompletionRaw(tablePrompt, 200);
+        tableMetadata[table.id] = tableMetadata[table.id] || [];
+        tableMetadata[table.id].push(new Metadatum(table.id, TABLE_METADATA, 'KBC.guessed.description', description));
+    }));
+    return tableMetadata;
+}
+
 async function writeMetadata(tableMetadata, columnsMetadata, writeData, storage)
 {
     await Promise.all(Object.entries(tableMetadata).map(async (item) => {
@@ -397,14 +433,8 @@ async function writeMetadata(tableMetadata, columnsMetadata, writeData, storage)
         if (writeData) {
             console.log(`Writing table ${tableId} metadata.`);
             let ret = await storage.setTableMetadata(tableId, tableMetadataProcessed, columnsMetadataProcessed);
-            //freeze(1000);
         }
     }));
-}
-
-function freeze(time) {
-    const stop = new Date().getTime() + time;
-    while(new Date().getTime() < stop);
 }
 
 export async function run () {
@@ -417,6 +447,8 @@ export async function run () {
     const useDataPreviews = configData.parameters.useDataPreviews || false;
     const writeData = configData.parameters.writeData || false;
     const openApiToken = configData.parameters['#openApiKey'] || null;
+    const createDescriptions = configData.parameters.createDescriptions || false;
+
     // todo
     process.env.OPENAI_API_KEY = openApiToken;
     if (!openApiToken) {
@@ -426,12 +458,20 @@ export async function run () {
     const configurations = await getConfigurations(storage);
     let tables = await getTables(storage, useDataPreviews);
     tables = await filterTables(tables, configurations, includeFlows, excludeTables);
+    tables = [tables[0]];
 
     // generate completion for all tables
     let {tableMetadata, columnsMetadata, tags} = await generateTablesMetadata(tables, configurations, explanations);
     let newTags = await generateCategories(tags);
 
     tableMetadata = await assignCategories(newTags, tableMetadata);
+    if (createDescriptions) {
+        tableMetadata = await generateDescriptions(tables, explanations, configurations, tableMetadata);
+    }
+
     await writeMetadata(tableMetadata, columnsMetadata, writeData, storage);
+
+    const price = 0.0200 / 1000 * completionTokens;
+    console.log(`Generated ${completionTokens} tokens, cost ${price} tala.`);
     process.exit(0);
 }
